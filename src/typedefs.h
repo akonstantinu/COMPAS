@@ -183,7 +183,7 @@ typedef struct RLOFProperties {
     unsigned int  eventCounter;
 
     double        time;
-
+    double        timePrev;
     bool          isRLOF1;
     bool          isRLOF2;
 

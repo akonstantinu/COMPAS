@@ -13,8 +13,8 @@ GSLINCDIR := /include
 GSLLIBDIR := /lib
 
 # boost directories
-BOOSTINCDIR := /include
-BOOSTLIBDIR := /lib
+BOOSTINCDIR = /usr/local/Cellar/boost/1.72.0/include
+BOOSTLIBDIR = /usr/local/Cellar/boost/1.72.0/lib
 
 # hdf5 directories
 HDF5INCDIR := /usr/include/hdf5/serial
