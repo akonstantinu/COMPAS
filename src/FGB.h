@@ -17,20 +17,26 @@ class FGB: virtual public BaseStar, public HG {
 public:
 
     FGB(const BaseStar &p_BaseStar, const bool p_Initialise = true) : BaseStar(p_BaseStar), HG(p_BaseStar, false) {
-        if (p_Initialise) Initialise();
+        m_StellarType = STELLAR_TYPE::FIRST_GIANT_BRANCH;                                                                                                                                           // Set stellar type
+        if (p_Initialise) Initialise();                                                                                                                                                             // Initialise if required
     }
 
-    FGB& operator = (const BaseStar &p_BaseStar) {
-        static_cast<BaseStar&>(*this) = p_BaseStar;
-        Initialise();
-        return *this;
+    FGB* Clone(const OBJECT_PERSISTENCE p_Persistence, const bool p_Initialise = true) {
+        FGB* clone = new FGB(*this, p_Initialise); 
+        clone->SetPersistence(p_Persistence); 
+        return clone; 
+    }
+
+    static FGB* Clone(FGB& p_Star, const OBJECT_PERSISTENCE p_Persistence, const bool p_Initialise = true) {
+        FGB* clone = new FGB(p_Star, p_Initialise); 
+        clone->SetPersistence(p_Persistence); 
+        return clone; 
     }
 
 
 protected:
 
     void Initialise() {
-        m_StellarType = STELLAR_TYPE::FIRST_GIANT_BRANCH;                                                                                                                                           // Set stellar type
         CalculateTimescales();                                                                                                                                                                      // Initialise timescales
         m_Age = m_Timescales[static_cast<int>(TIMESCALE::tBGB)];                                                                                                                                    // Set age appropriately
     }
@@ -45,7 +51,8 @@ protected:
     double          CalculateCoreMassOnPhase(const double p_Mass, const double p_Time) const;
     double          CalculateCoreMassOnPhase() const                                                { return CalculateCoreMassOnPhase(m_Mass0, m_Age); }                                            // Use class member variables
 
-    double          CalculateGyrationRadius() const                                                 { return 0.1; }                                                                                 // Hurley et al., 2000, after eq 109 for giants. Single number approximation.
+    double          CalculateCriticalMassRatioClaeys14(const bool p_AccretorIsDegenerate) const     { return GiantBranch::CalculateCriticalMassRatioClaeys14(p_AccretorIsDegenerate); }             // Skip HG 
+    double          CalculateCriticalMassRatioHurleyHjellmingWebbink() const                        { return GiantBranch::CalculateCriticalMassRatioHurleyHjellmingWebbink(); }
 
     double          CalculateHeCoreMassAtPhaseEnd() const                                           { return CalculateHeCoreMassOnPhase(); }                                                        // Same as on phase
     double          CalculateHeCoreMassOnPhase() const                                              { return m_CoreMass; }                                                                          // McHe(FGB) = Core Mass
@@ -55,9 +62,9 @@ protected:
     double          CalculateLuminosityOnPhase(const double p_Time) const;
     double          CalculateLuminosityOnPhase() const                                              { return CalculateLuminosityOnPhase(m_Age); }                                                   // Use class member variables
 
-    double          CalculateRadialExtentConvectiveEnvelope() const                                 { return GiantBranch::CalculateRadialExtentConvectiveEnvelope(); }                              // Skip HG
+    double          CalculateRadialExtentConvectiveEnvelope() const                                 { return m_Radius - CalculateConvectiveCoreRadius(); }                                          // Skip HG
 
-    double          CalculateRadiusAtPhaseEnd(const double p_Mass, const double p_Luminosity) const { return GiantBranch::CalculateRadiusOnPhase(p_Mass, p_Luminosity); }                           // Skip HG - same as on phase
+    double          CalculateRadiusAtPhaseEnd(const double p_Mass, const double p_Luminosity) const { return GiantBranch::CalculateRadiusOnPhase(p_Mass, p_Luminosity); }                  // Skip HG - same as on phase
     double          CalculateRadiusAtPhaseEnd() const                                               { return CalculateRadiusAtPhaseEnd(m_Mass, m_Luminosity); }                                     // Use class member variables
     double          CalculateRadiusOnPhase(const double p_Mass, const double p_Luminosity) const    { return GiantBranch::CalculateRadiusOnPhase(p_Mass, p_Luminosity); }                           // Skip HG
     double          CalculateRadiusOnPhase() const                                                  { return CalculateRadiusOnPhase(m_Mass, m_Luminosity); }                                        // Use class member variables
@@ -72,11 +79,9 @@ protected:
     STELLAR_TYPE    EvolveToNextPhase();
 
     bool            IsEndOfPhase() const                                                            { return !ShouldEvolveOnPhase(); }                                                              // Phase ends when age at or after He ignition timescale
-    bool            IsMassRatioUnstable(const double p_AccretorMass,
-                                            const bool   p_AccretorIsDegenerate) const              { return GiantBranch::IsMassRatioUnstable(p_AccretorMass, p_AccretorIsDegenerate); }            // Skip HG
     bool            IsSupernova() const                                                             { return false; }                                                                               // Not here
 
-    STELLAR_TYPE    ResolveEnvelopeLoss(bool p_NoCheck = false);
+    STELLAR_TYPE    ResolveEnvelopeLoss(bool p_Force = false);
     void            ResolveHeliumFlash();
     STELLAR_TYPE    ResolveSkippedPhase()                                                           { return STELLAR_TYPE::CORE_HELIUM_BURNING; }                                                   // Evolve to CHeB if phase is skipped
 

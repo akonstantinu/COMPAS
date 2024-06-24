@@ -1,18 +1,19 @@
 #ifndef __utils_h__
 #define __utils_h__
 
+#include <boost/filesystem.hpp>
+
 #include "constants.h"
 #include "typedefs.h"
-
-#include <algorithm> 
 
 namespace utils {
 
 
     // object identifiers - all classes have these (adding here (no class) for error handling)
-    inline OBJECT_ID    ObjectId()    { return static_cast<int>(OBJECT_TYPE::UTILS); }     // object id for utils - ordinal value from enum
-    inline OBJECT_TYPE  ObjectType()  { return OBJECT_TYPE::UTILS; }                       // object type for utils - always "UTILS"
-    inline STELLAR_TYPE StellarType() { return STELLAR_TYPE::NONE; }                       // stellar type for utils - always "NONE"
+    inline OBJECT_ID          ObjectId()          { return static_cast<int>(OBJECT_TYPE::UTILS); }  // object id for utils - ordinal value from enum
+    inline OBJECT_TYPE        ObjectType()        { return OBJECT_TYPE::UTILS; }                    // object type for utils - always "UTILS"
+    inline OBJECT_PERSISTENCE ObjectPersistence() { return OBJECT_PERSISTENCE::PERMANENT; }         // object persistence for utils - always "PERMANENT"
+    inline STELLAR_TYPE       StellarType()       { return STELLAR_TYPE::NONE; }                    // stellar type for utils - always "NONE"
 
 
     // namespace functions - alphabetical (sort of)
@@ -23,7 +24,7 @@ namespace utils {
 
     std::string                         CentreJustify(const std::string p_Str, std::size_t p_Width);
 
-    int                                 Compare(const double p_X, const double p_Y);
+    int                                 Compare(const double p_X, const double p_Y, const double p_Tolerance = -1.0, const bool p_Absolute = true);
 
     double                              ConvertPeriodInDaysToSemiMajorAxisInAU(const double p_Mass1, const double p_Mass2, const double p_Period);
 
@@ -33,7 +34,6 @@ namespace utils {
 
     bool                                FileExists(const std::string& p_Filename);
     bool                                FileExists(const char *p_Filename);
-
 
     /*
      * Generic function to find an element in a vector
@@ -61,10 +61,10 @@ namespace utils {
 
 
     /*
-     * Find a value in an unordered map and return the key if found, otherwise defaut value
+     * Find a value in an unordered map and return the key if found, otherwise default value
      *
      * This function looks for the passed string value in an unordered map, and if the string
-     * is found returns the key correspoding to the value found.  If the value is not found
+     * is found returns the key corresponding to the value found.  If the value is not found
      * the value passed as the default value is returned.
      *
      * The string comparison is case-insensitive.
@@ -139,7 +139,14 @@ namespace utils {
 
     std::tuple<ERROR, double>           SolveQuadratic(const double p_A, const double p_B, double p_C);
 
+    bool                                BracketTolerance(const double p_Bracket1, const double p_Bracket2);
+
     std::string                         SplashScreen(const bool p_Print = true);
+
+    std::tuple<ERROR, DBL_VECTOR>       ReadTimesteps(const std::string p_TimestepsFileName);
+
+    std::tuple<ERROR, std::string, STR_VECTOR> CreateDirectories(const std::string p_Path);
+    std::tuple<ERROR, std::string, STR_VECTOR> RemoveDirectories(const STR_VECTOR p_Paths);
 
 }
 

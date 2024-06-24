@@ -2,7 +2,6 @@
 #include "HeMS.h"
 #include "HeWD.h"
 
-
 ///////////////////////////////////////////////////////////////////////////////////////
 //                                                                                   //
 //                     COEFFICIENT AND CONSTANT CALCULATIONS ETC.                    //
@@ -219,7 +218,7 @@ double HG::CalculateLambdaNanjingEnhanced(const int p_MassInd, const int p_Zind)
                     maxBG = { 2.0, 1.5 };
                     Rmax = 160.0;
                     double R_in = std::min(Rmax, m_Radius);
-                    if (utils::Compare(R_in, 12.0)  > 0) {
+                    if (utils::Compare(R_in, 12.0) > 0) {
                         lambdaBG = { 1.8 * exp(-R_in / 80.0), exp(-R_in / 45.0) };
                     }
                     else {
@@ -775,7 +774,10 @@ double HG::CalculateRadiusAtPhaseEnd(const double p_Mass) const {
 /*
  * Calculate radius on the Hertzsprung Gap
  *
- * Hurley et al. 2000, eq 27
+ * Uses a modified version Hurley et al. 2000, eq 27
+ * See Hurley sse code `hrdiag.f` lines 92, 188-203
+ * Here we replace the numerator, REHG, with the GB radius if mass is below the threshold for He ignition,
+ * and a calculated value if mass is above the threshold for He ignition (see code below)
  *
  *
  * double CalculateRadiusOnPhase(const double p_Mass, const double p_Tau, const double p_RZAMS)
@@ -786,32 +788,52 @@ double HG::CalculateRadiusAtPhaseEnd(const double p_Mass) const {
  * @return                                      Radius on the Hertzsprung Gap in Rsol
  */
 double HG::CalculateRadiusOnPhase(const double p_Mass, const double p_Tau, const double p_RZAMS) const {
+#define b m_BnCoefficients                                              // for convenience and readability - undefined at end of function
+#define massCutoffs(x) m_MassCutoffs[static_cast<int>(MASS_CUTOFF::x)]  // for convenience and readability - undefined at end of function
+#define timescales(x) m_Timescales[static_cast<int>(TIMESCALE::x)]      // for convenience and readability - undefined at end of function
 
     double RTMS = MainSequence::CalculateRadiusAtPhaseEnd(p_Mass, p_RZAMS);
-    double REHG = CalculateRadiusAtPhaseEnd(p_Mass);
+    double RGB  = GiantBranch::CalculateRadiusOnPhase_Static(p_Mass, m_Luminosity, b);
 
-    return RTMS * PPOW((REHG / RTMS), p_Tau);
-}
+    double rx   = RGB;                                                                                              // Hurley sse terminlogy (rx)
 
+    if (utils::Compare(p_Mass, massCutoffs(MFGB)) > 0) {                                                            // mass above threshold for He ignition?
+                                                                                                                    // yes
+        // rMinHe is Hurley et al. 2000, eq 55 - first part (M >= MHeF)
+        double m_b28 = PPOW(p_Mass, b[28]);                                                                         // pow() is slow - do it once only
+        double rMinHe = ((b[24] * p_Mass) + (PPOW((b[25] * p_Mass), b[26]) * m_b28)) / (b[27] + m_b28);             // this is 'rmin' in Hurley sse 
 
-/*
- * Calculate the radial extent of the star's convective envelope (if it has one)
- *
- * Hurley et al. 2000, sec. 2.3, particularly subsec. 2.3.1, eqs 36-40
- *
- * (Technically not a radius calculation I suppose, but "radial extent" is close enough to put it with the radius calculations...)
- *
- *
- * double CalculateRadialExtentConvectiveEnvelope()
- *
- * @return                                      Radial extent of the star's convective envelope in Rsol
- */
-double HG::CalculateRadialExtentConvectiveEnvelope() const {
+        double lum = GiantBranch::CalculateLuminosityAtHeIgnition_Static(p_Mass, m_Alpha1, massCutoffs(MHeF), b);
 
-	BaseStar clone = *this;                         // clone this star so can manipulate without changes persisiting
-	clone.ResolveEnvelopeLoss(true);                // update clone's attributes after envelope is lost
+        // In the Hurley sse code mt (m_Mass) is used here (mass (m_Mass0) everywhere else)
+        double ry  = EAGB::CalculateRadiusOnPhase_Static(m_Mass, lum, massCutoffs(MHeF), b);                        // Hurley sse terminology (ry)
 
-    return std::sqrt(m_Tau) * (m_Radius - clone.Radius());
+        // calculate radius at He ignition for MFGB < p_Mass < HM
+        // Hurley et al. 2000, eq 50
+        
+        rx = std::min(rMinHe, ry);
+        
+        if (utils::Compare(p_Mass, HIGH_MASS_THRESHOLD) < 0) {
+            double mu = log10(p_Mass / HIGH_MASS_THRESHOLD) / log10(massCutoffs(MFGB) / HIGH_MASS_THRESHOLD);
+            rx        = rMinHe * PPOW(RGB / rMinHe, mu);
+        }
+
+        // this piece of code resets rx if the blue loop is relatively short
+        // see Hurley sse, function tblf() in `zfuncs1.f`
+        double r1 = 1.0 - rMinHe / ry;
+        r1 = std::max(r1, 1.0E-12);     // JR: I suspect this is where the check came from in the dicussion re blue loop in CHeB::CalculateTimescales() - I don't like this much...
+
+        double tblf = (1.0 - b[47]) * PPOW(p_Mass, b[48]) * PPOW(r1, b[49]);                                        // calculate blue-loop fraction of He-burning
+        tblf = std::min(1.0, std::max(0.0, tblf));                                                                  // clamp to [0.0, 1.0]
+
+        if (tblf < MINIMUM_BLUE_LOOP_FRACTION) rx = ry;                                                             // reset rx if short blue loop
+    }
+
+    return RTMS * PPOW(rx / RTMS, p_Tau);
+
+#undef timescales
+#undef massCutoffs
+#undef b
 }
 
 
@@ -820,7 +842,6 @@ double HG::CalculateRadialExtentConvectiveEnvelope() const {
 //                                 MASS CALCULATIONS                                 //
 //                                                                                   //
 ///////////////////////////////////////////////////////////////////////////////////////
-
 
 
 /*
@@ -861,7 +882,8 @@ double HG::CalculateCoreMassAtPhaseEnd(const double p_Mass) const {
 /*
  * Calculate core mass on the Hertzsprung Gap
  *
- * Hurley et al. 2000, eq 30
+ *  If the star is losing mass, choose core mass as the maximum of the core mass
+ *  at the previous time-step and the value given by Hurley et al. 2000, eq 30 (see Section 7)
  *
  *
  * double CalculateCoreMassOnPhase(const double p_Mass, const double p_Time)
@@ -871,19 +893,35 @@ double HG::CalculateCoreMassAtPhaseEnd(const double p_Mass) const {
  * @return                                      Core mass on the Hertzsprung Gap in Msol
  */
 double HG::CalculateCoreMassOnPhase(const double p_Mass, const double p_Time) const {
-#define timescales(x) m_Timescales[static_cast<int>(TIMESCALE::x)]  // for convenience and readability - undefined at end of function
+    return std::max(HG::CalculateCoreMassOnPhaseIgnoringPreviousCoreMass(p_Mass, p_Time), m_CoreMass);
+}
 
+
+/*
+ * Calculate core mass on the Hertzsprung Gap without accounting for previous core mass
+ *
+ * This ignores the previous core mass constraint (see section 7 of Hurley et al. 2000) when computing the expected core mass,
+ * and just follows eq. 30.  This is useful for asking what the core mass would be for the given mass without considering
+ * that the core mass should not be allowed to drop -- used, e.g., in HG::UpdateInitialMass().
+ *
+ *
+ * double CalculateCoreMassOnPhaseIgnoringPreviousCoreMass(const double p_Mass, const double p_Time)
+ *
+ * @param   [IN]    p_Mass                      Mass in Msol
+ * @param   [IN]    p_Time                      Time after ZAMS in Myr (tBGB <= time <= tHeI)
+ * @return                                      Core mass on the Hertzsprung Gap in Msol
+ */
+double HG::CalculateCoreMassOnPhaseIgnoringPreviousCoreMass(const double p_Mass, const double p_Time) const {
+#define timescales(x) m_Timescales[static_cast<int>(TIMESCALE::x)]  // for convenience and readability - undefined at end of function
+    
     double McEHG = CalculateCoreMassAtPhaseEnd(p_Mass);
     double rhoHG = CalculateRho(p_Mass);
     double tau   = (p_Time - timescales(tMS)) / (timescales(tBGB) - timescales(tMS));
-
-    // If the star is losing mass, choose core mass as the maximum of the core mass
-    // at the previous time-step and the value given by Hurley et al. 2000, eq 30
-    return std::max((((1.0 - tau) * rhoHG) + tau) * McEHG, m_CoreMass);
-
+    
+    return (((1.0 - tau) * rhoHG) + tau) * McEHG;
+    
 #undef timescales
 }
-
 
 /*
  * Calculate rejuvenation factor for stellar age based on mass lost/gained during mass transfer
@@ -910,7 +948,7 @@ double HG::CalculateMassTransferRejuvenationFactor() const {
             }
             break;
 
-        default:                                                        // unknow prescription - use default Hurley et al. 2000 prescription = 1.0
+        default:                                                        // unknown prescription - use default Hurley et al. 2000 prescription = 1.0
             SHOW_WARN(ERROR::UNKNOWN_MT_REJUVENATION_PRESCRIPTION);     // show warning
     }
 
@@ -919,30 +957,27 @@ double HG::CalculateMassTransferRejuvenationFactor() const {
 
 
 /*
- * Determines if mass transfer produces a wet merger
+ * Determines if mass transfer is unstable according to the critical mass ratio.
  *
- * According to the mass ratio limit discussed by de Mink et al. 2013 and Claeys et al. 2014
+ * See e.g de Mink et al. 2013, Claeys et al. 2014, and Ge et al. 2010, 2015, 2020 for discussions.
  *
- * Assumes this star is the donor; relevant accretor details are passed as parameters
+ * Assumes this star is the donor; relevant accretor details are passed as parameters.
+ * Critical mass ratio is defined as qCrit = mAccretor/mDonor.
  *
+ * double HG::CalculateCriticalMassRatioClaeys14(const bool p_AccretorIsDegenerate) 
  *
- * bool IsMassRatioUnstable(const double p_AccretorMass, const bool p_AccretorIsDegenerate)
- *
- * @param   [IN]    p_AccretorMass              Mass of accretor in Msol
  * @param   [IN]    p_AccretorIsDegenerate      Boolean indicating if accretor in degenerate (true = degenerate)
- * @return                                      Boolean indicating stability of mass transfer (true = unstable)
+ * @return                                      Critical mass ratio for unstable MT 
  */
-bool HG::IsMassRatioUnstable(const double p_AccretorMass, const bool p_AccretorIsDegenerate) const {
+double HG::CalculateCriticalMassRatioClaeys14(const bool p_AccretorIsDegenerate) const {
 
-    bool result = false;                                                                                                    // default is stable
+    double qCrit;
 
-    if (OPTIONS->MassTransferCriticalMassRatioHG()) {
-        result = p_AccretorIsDegenerate
-                    ? (p_AccretorMass / m_Mass) < OPTIONS->MassTransferCriticalMassRatioHGDegenerateAccretor()              // degenerate accretor
-                    : (p_AccretorMass / m_Mass) < OPTIONS->MassTransferCriticalMassRatioHGNonDegenerateAccretor();          // non-degenerate accretor
-    }
-
-    return result;
+    qCrit = p_AccretorIsDegenerate
+                ? OPTIONS->MassTransferCriticalMassRatioHGDegenerateAccretor()              // degenerate accretor
+                : OPTIONS->MassTransferCriticalMassRatioHGNonDegenerateAccretor();          // non-degenerate accretor
+                                                                                                                        
+    return qCrit;
 }
 
 
@@ -984,10 +1019,10 @@ double HG::CalculateTauOnPhase() const {
 void HG::UpdateAgeAfterMassLoss() {
 
     double tBGB      = m_Timescales[static_cast<int>(TIMESCALE::tBGB)];
-    double tBGBprime = CalculateLifetimeToBGB(m_Mass);
+    double tBGBprime = CalculateLifetimeToBGB(m_Mass0);
 
     double tMS       = m_Timescales[static_cast<int>(TIMESCALE::tMS)];
-    double tMSprime  = MainSequence::CalculateLifetimeOnPhase(m_Mass, tBGBprime);
+    double tMSprime  = MainSequence::CalculateLifetimeOnPhase(m_Mass0, tBGBprime);
 
     m_Age = tMSprime + (((tBGBprime - tMSprime) / (tBGB - tMS)) * (m_Age - tMS));
 }
@@ -1000,38 +1035,6 @@ void HG::UpdateAgeAfterMassLoss() {
 ///////////////////////////////////////////////////////////////////////////////////////
 
 
-/*
- * Calculate the mass-radius response exponent Zeta
- *
- * Hurley et al. 2000, eqs 97 & 98
- *
- *
- * double CalculateZeta(ZETA_PRESCRIPTION p_ZetaPrescription)
- *
- * @param   [IN]    p_ZetaPrescription          Prescription for computing ZetaStar
- * @return                                      mass-radius response exponent Zeta
- */
-double HG::CalculateZeta(ZETA_PRESCRIPTION p_ZetaPrescription) {
-    
-    double zeta = 0.0;                                              // default value
-    
-    // Use ZetaRadiativeEnvelopeGiant() for radiative envelope giant-like stars, CalculateZadiabatic for convective-envelope giants
-    switch (DetermineEnvelopeType()) {                           // which envelope?
-        case ENVELOPE::RADIATIVE:
-            zeta = OPTIONS->ZetaRadiativeEnvelopeGiant();
-            break;
-            
-        case ENVELOPE::CONVECTIVE:
-            zeta = CalculateZadiabatic(p_ZetaPrescription);
-            break;
-            
-        default:                                                    // shouldn't happen
-            m_Error = ERROR::INVALID_TYPE_ZETA_CALCULATION;         // set error value
-            SHOW_ERROR(m_Error);                                    // warn that an error occurred
-    }
-    
-    return zeta;
-}
 
 /*
  * Determine the star's envelope type.
@@ -1058,7 +1061,7 @@ ENVELOPE HG::DetermineEnvelopeType() const {
             break;
             
         case ENVELOPE_STATE_PRESCRIPTION::FIXED_TEMPERATURE:
-            envelope =  utils::Compare(Temperature() * TSOL, CONVECTIVE_BOUNDARY_TEMPERATURE) > 0 ? ENVELOPE::RADIATIVE : ENVELOPE::CONVECTIVE;  // Envelope is radiative if temperature exceeds fixed threshold, otherwise convective
+            envelope =  utils::Compare(Temperature() * TSOL, OPTIONS->ConvectiveEnvelopeTemperatureThreshold()) > 0 ? ENVELOPE::RADIATIVE : ENVELOPE::CONVECTIVE;  // Envelope is radiative if temperature exceeds fixed threshold, otherwise convective
             break;
             
         default:                                                                                    // unknown prescription - use default envelope type
@@ -1113,20 +1116,24 @@ double HG::ChooseTimestep(const double p_Time) const {
  *     - m_COCoreMass
  *     - m_Age
  *
- * STELLAR_TYPE ResolveEnvelopeLoss()
+ * STELLAR_TYPE ResolveEnvelopeLoss(bool p_Force)
  *
- * @return                                      Stellar Type to which star shoule evolve after losing envelope
+ * @param   [IN]    p_Force                     Boolean to indicate whether the resolution of the loss of the envelope should be performed
+ *                                              without checking the precondition(s).
+ *                                              Default is false.
+ *
+ * @return                                      Stellar Type to which star should evolve after losing envelope
  */
-STELLAR_TYPE HG::ResolveEnvelopeLoss(bool p_NoCheck) {
+STELLAR_TYPE HG::ResolveEnvelopeLoss(bool p_Force) {
 #define timescales(x) m_Timescales[static_cast<int>(TIMESCALE::x)]              // for convenience and readability - undefined at end of function
 #define massCutoffs(x) m_MassCutoffs[static_cast<int>(MASS_CUTOFF::x)]          // for convenience and readability - undefined at end of function
 
     STELLAR_TYPE stellarType = m_StellarType;
 
-    if (p_NoCheck || utils::Compare(m_CoreMass, m_Mass) > 0) {                  // envelope loss
+    if (p_Force || utils::Compare(m_CoreMass, m_Mass) >= 0) {                   // envelope loss
 
-        m_Mass       = std::min(m_CoreMass, m_Mass);
-        
+        m_Mass = std::min(m_CoreMass, m_Mass);
+
         if (utils::Compare(m_Mass0, massCutoffs(MHeF)) < 0) {                   // star evolves to Helium White Dwarf
 
             stellarType  = STELLAR_TYPE::HELIUM_WHITE_DWARF;
@@ -1143,7 +1150,6 @@ STELLAR_TYPE HG::ResolveEnvelopeLoss(bool p_NoCheck) {
             m_Luminosity = HeMS::CalculateLuminosityAtZAMS_Static(m_Mass);
             m_Age        = 0.0;                                                 // can't use Hurley et al. 2000, eq 76 here - timescales(tHe) not calculated yet
         }
-
     }
 
     return stellarType;
@@ -1187,7 +1193,9 @@ STELLAR_TYPE HG::EvolveToNextPhase() {
  *
  */
 void HG::UpdateInitialMass() {
-    if (utils::Compare(m_CoreMass,HG::CalculateCoreMassOnPhase(m_Mass, m_Age)) < 0 ) {        //The current mass would yield a core mass larger than the current core mass -- i.e., no unphysical core mass decrease would ensue
+    // only update mass0 if the current mass would yield a core mass larger than or equal to the current core mass
+    // i.e., no unphysical core mass decrease would ensue
+    if (utils::Compare(m_CoreMass, HG::CalculateCoreMassOnPhaseIgnoringPreviousCoreMass(m_Mass, m_Age)) <= 0) {
         m_Mass0 = m_Mass;
     }
 }

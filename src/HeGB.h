@@ -17,13 +17,21 @@ class HeGB: virtual public BaseStar, public HeHG {
 public:
 
     HeGB(const BaseStar &p_BaseStar, const bool p_Initialise = true) : BaseStar(p_BaseStar), HeHG(p_BaseStar, false) {
-        if (p_Initialise) Initialise();
+        STELLAR_TYPE currentStellarType = m_StellarType;                                                                                                                // Stellar type evolving from
+        m_StellarType = STELLAR_TYPE::NAKED_HELIUM_STAR_GIANT_BRANCH;                                                                                                   // Set stellar type
+        if (p_Initialise) Initialise(currentStellarType);                                                                                                               // Initialise if required
     }
 
-    HeGB& operator = (const BaseStar &p_BaseStar) {
-        static_cast<BaseStar&>(*this) = p_BaseStar;
-        Initialise();
-        return *this;
+    HeGB* Clone(const OBJECT_PERSISTENCE p_Persistence, const bool p_Initialise = true) {
+        HeGB* clone = new HeGB(*this, p_Initialise); 
+        clone->SetPersistence(p_Persistence); 
+        return clone; 
+    }
+
+    static HeGB* Clone(HeGB& p_Star, const OBJECT_PERSISTENCE p_Persistence, const bool p_Initialise = true) {
+        HeGB* clone = new HeGB(p_Star, p_Initialise); 
+        clone->SetPersistence(p_Persistence); 
+        return clone; 
     }
 
 
@@ -34,22 +42,22 @@ public:
 
     static  double      CalculateLuminosityOnPhase_Static(const double p_CoreMass, const double p_GBPB, const double p_GBPD);
 
+    double          CalculateRadialExtentConvectiveEnvelope() const                                 { return FGB::CalculateRadialExtentConvectiveEnvelope(); }                             
     static  DBL_DBL     CalculateRadiusOnPhase_Static(const double p_Mass, const double p_Luminosity);
 
 
 protected:
 
-    void Initialise() {
-        STELLAR_TYPE previousStellarType = m_StellarType;;
-        m_StellarType = STELLAR_TYPE::NAKED_HELIUM_STAR_GIANT_BRANCH;                                                                                                   // Set stellar type
+    void Initialise(const STELLAR_TYPE p_PreviousStellarType) {
         CalculateTimescales();                                                                                                                                          // Initialise timescales
-        if (previousStellarType != STELLAR_TYPE::NAKED_HELIUM_STAR_HERTZSPRUNG_GAP)                                                                                     // If not evolving from HeHG...
+        if (p_PreviousStellarType != STELLAR_TYPE::NAKED_HELIUM_STAR_HERTZSPRUNG_GAP)                                                                                   // If not evolving from HeHG...
             m_Age = CalculateAgeOnPhase_Static(m_Mass, m_COCoreMass, m_Timescales[static_cast<int>(TIMESCALE::tHeMS)], m_GBParams);                                     // ... Set age appropriately
     }
 
 
     // member functions - alphabetically
-    double      CalculateGyrationRadius() const                                                                     { return 0.1; }                                         // Hurley et al., 2000, after eq 109 for giants. Single number approximation.
+    double      CalculateCriticalMassRatioClaeys14(const bool p_AccretorIsDegenerate) const ;
+    double      CalculateCriticalMassRatioHurleyHjellmingWebbink() const                                            { return 1.28; }                                        // From BSE. Using the inverse owing to how qCrit is defined in COMPAS. See Hurley et al. 2002 sect. 2.6.1 for additional details.
 
     double      CalculateLuminosityOnPhase(const double p_CoreMass, const double p_GBPB, const double p_GBPD) const { return CalculateLuminosityOnPhase_Static(p_CoreMass, p_GBPB, p_GBPD); }
     double      CalculateLuminosityOnPhase() const                                                                  { return CalculateLuminosityOnPhase(m_CoreMass, m_GBParams[static_cast<int>(GBP::B)], m_GBParams[static_cast<int>(GBP::D)]); }
@@ -61,8 +69,6 @@ protected:
     std::tuple <double, STELLAR_TYPE> CalculateRadiusAndStellarTypeOnPhase() const                                  { return CalculateRadiusAndStellarTypeOnPhase(m_Mass, m_Luminosity); }
             
     ENVELOPE    DetermineEnvelopeType() const                                                                       { return ENVELOPE::CONVECTIVE; }                        // Always CONVECTIVE
-
-    bool        IsMassRatioUnstable(const double p_AccretorMass, const bool p_AccretorIsDegenerate) const;
 };
 
 #endif // __HeGB_h__

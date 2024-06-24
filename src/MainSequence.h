@@ -14,8 +14,7 @@ class MainSequence: virtual public BaseStar {
 
 public:
 
-    MainSequence(const BaseStar& baseStar) : BaseStar(baseStar) {}
-    MainSequence& operator = (const BaseStar& baseStar) { static_cast<BaseStar&>(*this) = baseStar; return *this; }
+    MainSequence(const BaseStar& p_BaseStar) : BaseStar(p_BaseStar) {}
 
 
 protected:
@@ -25,6 +24,9 @@ protected:
     double          CalculateAlphaL(const double p_Mass) const;
     double          CalculateAlphaR(const double p_Mass) const;
 
+    double          CalculateConvectiveCoreMass() const;
+    double          CalculateConvectiveCoreRadius() const;
+    DBL_DBL         CalculateConvectiveEnvelopeMass() const;
     double          CalculateBetaL(const double p_Mass) const;
     double          CalculateBetaR(const double p_Mass) const;
 
@@ -38,12 +40,10 @@ protected:
     double          CalculateCOCoreMassAtPhaseEnd() const                                   { return CalculateCOCoreMassOnPhase(); }                                // Same as on phase
     double          CalculateCOCoreMassOnPhase() const                                      { return 0.0; }                                                         // McCO(MS) = 0.0
 
-    double          CalculateCoreMassAtPhaseEnd() const                                     { return CalculateCoreMassOnPhase(); }                                  // Same as on phase
+    double          CalculateCoreMassAtPhaseEnd() const                                     { return OPTIONS->RetainCoreMassDuringCaseAMassTransfer() ? MinimumCoreMass() : 0.0; }                // Accounts for minimal core mass built up prior to mass loss through mass transfer
     double          CalculateCoreMassOnPhase() const                                        { return 0.0; }                                                         // Mc(MS) = 0.0 (Hurley et al. 2000, just before eq 28)
 
-    double          CalculateGyrationRadius() const;
-
-    double          CalculateHeCoreMassAtPhaseEnd() const                                   { return CalculateHeCoreMassOnPhase(); }                                // Same as on phase
+    double          CalculateHeCoreMassAtPhaseEnd() const                                   { return CalculateCoreMassAtPhaseEnd(); }                               // Same as He core mass
     double          CalculateHeCoreMassOnPhase() const                                      { return 0.0; }                                                         // McHe(MS) = 0.0
 
     double          CalculateLifetimeOnPhase(const double p_Mass, const double p_TBGB) const;
@@ -53,12 +53,13 @@ protected:
     double          CalculateLuminosityOnPhase(const double p_Time, const double p_Mass, const double p_LZAMS) const;
     double          CalculateLuminosityOnPhase() const                                      { return CalculateLuminosityOnPhase(m_Age, m_Mass0, m_LZAMS0); }        // Use class member variables
 
-    double          CalculateMomentOfInertia(const double p_RemnantRadius = 0.0) const      { return CalculateGyrationRadius() * m_Mass * m_Radius * m_Radius; }
-    double          CalculateMomentOfInertiaAU(const double p_RemnantRadius = 0.0) const    { return CalculateMomentOfInertia(p_RemnantRadius * RSOL_TO_AU) * RSOL_TO_AU * RSOL_TO_AU; }
+    double          CalculateMomentOfInertia() const                                        { return (0.1 * (m_Mass) * m_Radius * m_Radius); }                      // k2 = 0.1 as defined in Hurley et al. 2000, after eq 109
 
     double          CalculatePerturbationMu() const                                         { return 5.0; }                                                         // mu(MS) = 5.0 (Hurley et al. 2000, eqs 97 & 98)
 
     double          CalculateRadialExtentConvectiveEnvelope() const;
+
+    double          CalculateRadiusOnPhaseTau(const double p_Mass, const double p_Tau) const;
 
     double          CalculateRadiusOnPhase(const double p_Mass, const double p_Time, const double p_RZAMS) const;
     double          CalculateRadiusAtPhaseEnd(const double p_Mass, const double p_RZAMS) const;
@@ -71,7 +72,7 @@ protected:
     void            CalculateTimescales(const double p_Mass, DBL_VECTOR &p_Timescales);
     void            CalculateTimescales()                                                   { CalculateTimescales(m_Mass0, m_Timescales); }                         // Use class member variables
 
-    double          CalculateZeta(ZETA_PRESCRIPTION p_ZetaPrescription)                     { return OPTIONS->ZetaMainSequence(); }
+    double          CalculateZetaConstantsByEnvelope(ZETA_PRESCRIPTION p_ZetaPrescription)  { return OPTIONS->ZetaMainSequence(); }
 
     double          ChooseTimestep(const double p_Time) const;
 
@@ -82,12 +83,14 @@ protected:
 
     void            PerturbLuminosityAndRadius() { }                                                                                                                // NO-OP
 
-    STELLAR_TYPE    ResolveEnvelopeLoss(bool p_NoCheck = false);
+    STELLAR_TYPE    ResolveEnvelopeLoss(bool p_Force = false);
 
     bool            ShouldEvolveOnPhase() const                                             { return (m_Age < m_Timescales[static_cast<int>(TIMESCALE::tMS)]); }    // Evolve on MS phase if age in MS timescale
 
     void            UpdateInitialMass()                                                     { m_Mass0 = m_Mass; }                                                   // Per Hurley et al. 2000, section 7.1
     void            UpdateAgeAfterMassLoss();                                                                                                                       // Per Hurley et al. 2000, section 7.1
+    
+    void            UpdateMinimumCoreMass();                                                                                                                        // Set minimal core mass following Main Sequence mass transfer to MS age fraction of TAMS core mass
 
 };
 

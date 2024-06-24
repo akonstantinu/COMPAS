@@ -15,12 +15,13 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../compas_python_utils/'))
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'COMPAS'
-copyright = '2021, The Authors'
+copyright = '2024 The Authors'
 author = 'TeamCOMPAS'
 
 
@@ -28,13 +29,12 @@ author = 'TeamCOMPAS'
 
 # If your documentation needs a minimal Sphinx version, state it here.
 #
-# needs_sphinx = '1.0'
+needs_sphinx = '4.3.2'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx_rtd_theme',
     'sphinx.ext.mathjax',
     'sphinx_math_dollar',
     'sphinx.ext.intersphinx',
@@ -43,7 +43,14 @@ extensions = [
     'nbsphinx',
     'matplotlib.sphinxext.plot_directive',
     'IPython.sphinxext.ipython_console_highlighting',
-    'IPython.sphinxext.ipython_directive'
+    'IPython.sphinxext.ipython_directive',
+    "sphinx.ext.autodoc",
+    "numpydoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.viewcode",
+    "sphinxarg.ext",
+    "sphinx_tabs.tabs",
 ]
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
@@ -70,7 +77,7 @@ master_doc = 'index'
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = 'en'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -86,7 +93,8 @@ pygments_style = None
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'alabaster'
+#html_theme = 'sphinx_rtd_theme'
 #html_theme = 'pyramid'
 #html_theme = 'nature'
 
@@ -95,7 +103,9 @@ html_theme = 'sphinx_rtd_theme'
 # documentation.
 #
 html_theme_options = {
-    'prev_next_buttons_location': 'bottom'
+#    'prev_next_buttons_location': 'bottom'
+    'show_relbar_top': 'true',
+    'show_relbar_bottom': 'true'
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -112,6 +122,12 @@ html_static_path = ['_static']
 # 'searchbox.html']``.
 #
 # html_sidebars = {}
+html_sidebars = {
+    '**': [
+        'globaltoc.html',
+        'searchbox.html'
+    ]
+}
 
 html_show_sourcelink = False        # JR
 html_use_smartypants = False        # JR

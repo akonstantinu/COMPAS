@@ -2,6 +2,8 @@
 #define __typedefs_h__
 
 #include "constants.h"
+#include <boost/math/tools/roots.hpp>
+#include <boost/numeric/odeint.hpp>
 
 // JR: todo: clean this up and document it better
 
@@ -12,10 +14,23 @@ typedef std::initializer_list<SN_EVENT>        SN_EVENT_LIST;
 typedef std::vector<STELLAR_TYPE>              STYPE_VECTOR;
 
 
+// Option details
+typedef struct OptionDetails {
+    std::string              optionStr;                     // name string
+    std::string              valueStr;                      // value string
+    std::string              sourceStr;                     // source string (COMPAS DEFAULT or USER SUPPLIED)    
+    std::string              typeStr;                       // detailed data type (e.g. UNSIGNED LONG INT)
+    TYPENAME                 dataType;                      // short data type (e.g. INT, FLOAT, etc)
+    std::string              defaultStr;                    // default value string
+    std::vector<std::string> allowedStr;                    // vector of allowed value strings (empty for options that don't have multiple allowed values)
+} OptionDetailsT;
+
+
 // Log file details
 typedef struct LogfileDetails {
     int                           id;                       // logfile id
     std::string                   filename;                 // filename
+    int                           recordTypes;              // bitmap of record types to be written to the file (if 0, the file is disabled)
     ANY_PROPERTY_VECTOR           recordProperties;         // list of properties (columns) to be written to the logfile
     std::vector<TYPENAME>         propertyTypes;            // the COMPAS datatypes of the properties
     std::vector<STRING_QUALIFIER> stringTypes;              // the string type (fixed or variable length) for TYPENAME::STRING datatypes
@@ -54,7 +69,7 @@ struct KickMagnitudeParams {
 
 
 // struct for supernova events:
-// CCSN, ECSN, PISN, PPSIN, USSN
+// CCSN, ECSN, PISN, PPSIN, USSN, AIC
 
 typedef struct SNEvents {
     SN_EVENT current;                                       // Supernova event at the current timestep: NONE if no supernova event happening
@@ -104,10 +119,13 @@ typedef struct SupernovaDetails {                           // Holds attributes,
     double           eccentricAnomaly;                      // Eccentric anomaly at instataneous time of the SN
     SNEventsT        events;                                // Record of supernova events undergone by the star
     double           fallbackFraction;                      // Fallback fraction during a supernova event
-    double           HeCoreMassAtCOFormation;               // Helium core mass of the star when it goes supernova and forms a compact objec
+    double           HeCoreMassAtCOFormation;               // Helium core mass of the star when it goes supernova and forms a compact object
     bool             isHydrogenPoor;                        // Flag to indicate if exploding star is hydrogen-poor. We consider an H-rich star all SN progenitors that have an H envelope, otherwise H-poor
     double           kickMagnitude;                         // Kick magnitude the system received during the supernova (km s^-1)
     double           kickMagnitudeRandom;                   // Random number U(0,1) for choosing the supernova kick magnitude - drawn once at star creation
+    double           rocketKickMagnitude;                   // Rocket kick magnitude the system received after the supernova (km s^-1)
+    double           rocketKickPhi;                         // Rocket kick azimuthal angle phi the system received after the supernova 
+    double           rocketKickTheta;                       // Rocket kick polar angle theta the system received after the supernova 
     double           meanAnomaly;                           // Mean anomaly at instantaneous time of the SN - uniform in [0, 2pi]
     double           phi;                                   // Kick angle in the orbital plane, defined CCW from the radial vector pointed away from the Companion (rad) [0, 2pi)
     SN_STATE         supernovaState;                        // Indicates which star (or stars) are undergoing / have undergone a supernova event
@@ -122,7 +140,9 @@ typedef struct PulsarDetails {
     double magneticField;                                   // Pulsar magnetic field strength (G)
     double spinPeriod;                                      // Pulsar spin period (ms)
     double spinFrequency;                                   // Pulsar spin frequency in rads per second
-    double spinDownRate;                                    // Pulsar spin down rate (Pdot, dimensionless)
+    double spinDownRate;                                    // Pulsar spin down rate as time derivative of spin frequency (fdot, rad s^-2)
+    double birthPeriod;                                     // Pulsar birth period (s)
+    double birthSpinDownRate;                               // Pulsar birth down rate as Pdot (s s^-1)
 } PulsarDetailsT;
 
 
@@ -158,6 +178,7 @@ typedef struct BindingEnergies {
 	double loveridge;                                       // Calculated using lambda = m_Lambdas.loveridge
 	double loveridgeWinds;                                  // Calculated using lambda = m_Lambdas.loveridgeWinds
 	double kruckow;                                         // Calculated using lambda = m_Lambdas.kruckow
+    double dewi;                                            // Calculated using lambda = m_Lambdas.dewi
 } BindingEnergiesT;
 
 
@@ -183,11 +204,15 @@ typedef struct RLOFProperties {
     unsigned int  eventCounter;
 
     double        time;
+    double        timePrev;
 
     bool          isRLOF1;
     bool          isRLOF2;
 
     bool          isCE;
+    
+    double        massLossRateFromDonor;
+    double        accretionEfficiency;
 
 } RLOFPropertiesT;
 
@@ -261,7 +286,6 @@ typedef struct StellarCEESavedValues {
     double       dynamicalTimescale;
     double       luminosity;
     double       mass;
-    double       nuclearTimescale;
     double       radialExpansionTimescale;
     double       radius;
     STELLAR_TYPE stellarType;
@@ -278,7 +302,15 @@ typedef struct StellarCEDetails {                      // Common Envelope detail
     double                 CoreMass;
     double                 HeCoreMass;
     double                 lambda;
+    double                 convectiveEnvelopeMass;              // for two-stage CE formalism
+    double                 radiativeIntershellMass;             // for two-stage CE formalism
+    double                 convectiveEnvelopeBindingEnergy;     // for two-stage CE formalism
 } StellarCEDetailsT; // was CommonEnvelopeDetailsT;
 
+
+// For boost ODE integrators, see https://www.boost.org/doc/libs/1_83_0/libs/numeric/odeint/doc/html/boost_numeric_odeint/tutorial/harmonic_oscillator.html
+typedef std::vector< double > state_type;
+typedef boost::numeric::odeint::runge_kutta_cash_karp54< state_type > error_stepper_type;
+typedef boost::numeric::odeint::controlled_runge_kutta< error_stepper_type > controlled_stepper_type;
 
 #endif // __typedefs_h__

@@ -17,13 +17,20 @@ class CHeB: virtual public BaseStar, public FGB {
 public:
 
     CHeB(const BaseStar &p_BaseStar, const bool p_Initialise = true) : BaseStar(p_BaseStar), FGB(p_BaseStar, false) {
-        if (p_Initialise) Initialise();
+        m_StellarType = STELLAR_TYPE::CORE_HELIUM_BURNING;                                                                                                      // Set stellar type
+        if (p_Initialise) Initialise();                                                                                                                         // Initialise if required
     }
 
-    CHeB& operator = (const BaseStar &p_BaseStar) {
-        static_cast<BaseStar&>(*this) = p_BaseStar;
-        Initialise();
-        return *this;
+    CHeB* Clone(const OBJECT_PERSISTENCE p_Persistence, const bool p_Initialise = true) {
+        CHeB* clone = new CHeB(*this, p_Initialise); 
+        clone->SetPersistence(p_Persistence); 
+        return clone; 
+    }
+
+    static CHeB* Clone(CHeB& p_Star, const OBJECT_PERSISTENCE p_Persistence, const bool p_Initialise = true) {
+        CHeB* clone = new CHeB(p_Star, p_Initialise); 
+        clone->SetPersistence(p_Persistence); 
+        return clone; 
     }
 
 
@@ -62,14 +69,13 @@ protected:
     double          CalculateBluePhaseFBL(const double p_Mass);
 
     double          CalculateCOCoreMassOnPhase() const                          { return 0.0; }                                                                 // McCO(CHeB) = 0.0
-
-    double          CalculateCoreMassAtPhaseEnd() const                         { return CalculateCoreMassAtBAGB(m_Mass0); }                                    // Use class member variables
+    double          CalculateCoreMassAtPhaseEnd() const                         { return CalculateCoreMassOnPhase(); }                                          // Per Hurley sse code `hrdiag.f` lines 259-265
     double          CalculateCoreMassOnPhase(const double p_Mass, const double p_Tau) const;
     double          CalculateCoreMassOnPhase() const                            { return CalculateCoreMassOnPhase(m_Mass0, m_Tau); }                            // Use class member variables
 
-    double          CalculateHeCoreMassAtPhaseEnd() const                       { return m_CoreMass; }
+    double          CalculateCriticalMassRatioHurleyHjellmingWebbink() const    { return 0.33; }                                                                // As coded in BSE. Using the inverse owing to how qCrit is defined in COMPAS. See Hurley et al. 2002 sect. 2.6.1 for additional details.
 
-    double          CalculateGyrationRadius() const                             { return 0.21; }                                                                // Hurley et al., 2000, after eq 109 for n=3/2 polytrope or dense convective core. Single number approximation.
+    double          CalculateHeCoreMassAtPhaseEnd() const                       { return m_CoreMass; }
 
     double          CalculateLambdaDewi() const;
     double          CalculateLambdaNanjingStarTrack(const double p_Mass, const double p_Metallicity) const;
@@ -84,8 +90,6 @@ protected:
     double          CalculateLuminosityAtPhaseEnd() const                       { return CalculateLuminosityAtBAGB(m_Mass0); }
     double          CalculateLuminosityOnPhase(const double p_Mass, const double p_Tau) const;
     double          CalculateLuminosityOnPhase() const                          { return CalculateLuminosityOnPhase(m_Mass0, m_Tau); }
-
-    double          CalculateRadialExtentConvectiveEnvelope() const             { return BaseStar::CalculateRadialExtentConvectiveEnvelope(); }                 // CHeB stars don't have a convective envelope
 
     double          CalculateRadiusAtBluePhaseEnd(const double p_Mass) const;
     double          CalculateRadiusAtBluePhaseStart(const double p_Mass) const;
@@ -104,7 +108,7 @@ protected:
     double          CalculateTauOnPhase() const;
 
     void            CalculateTimescales(const double p_Mass, DBL_VECTOR &p_Timescales);
-    void            CalculateTimescales()                                       { CalculateTimescales(m_Mass0, m_Timescales); }                                 // Use class member variables
+    void            CalculateTimescales()                                       { CalculateTimescales(m_Mass0, m_Timescales); }                        // Use class member variables
 
     double          ChooseTimestep(const double p_Time) const;
 
@@ -115,9 +119,10 @@ protected:
     bool            IsEndOfPhase() const                                        { return !ShouldEvolveOnPhase(); }                                              // Phase ends when age at or after He Burning
     bool            IsSupernova() const                                         { return false; }                                                               // Not here
 
-    STELLAR_TYPE    ResolveEnvelopeLoss(bool p_NoCheck = false);
+    STELLAR_TYPE    ResolveEnvelopeLoss(bool p_Force = false);
     void            ResolveHeliumFlash() {  }                                                                                                                   // NO-OP
 
+    bool            ShouldEnvelopeBeExpelledByPulsations() const { return ( OPTIONS->ExpelConvectiveEnvelopeAboveLuminosityThreshold() && DetermineEnvelopeType() == ENVELOPE::CONVECTIVE && utils::Compare( log10(m_Luminosity/m_Mass), OPTIONS->LuminosityToMassThreshold() ) >= 0 ) ; }                             // Envelope of convective star with luminosity to mass ratio beyond threshold should be expelled
     bool            ShouldEvolveOnPhase() const;
     bool            ShouldSkipPhase() const                                     { return false; }                                                               // Never skip CHeB phase
 

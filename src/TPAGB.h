@@ -17,20 +17,26 @@ class TPAGB: virtual public BaseStar, public EAGB {
 public:
 
     TPAGB(const BaseStar &p_BaseStar, const bool p_Initialise = true) : BaseStar(p_BaseStar), EAGB(p_BaseStar, false) {
-        if (p_Initialise) Initialise();
+        m_StellarType = STELLAR_TYPE::THERMALLY_PULSING_ASYMPTOTIC_GIANT_BRANCH;                                                                                                                            // Set stellar type
+        if (p_Initialise) Initialise();                                                                                                                                                                     // Initialise if required
     }
 
-    TPAGB& operator = (const BaseStar &p_BaseStar) {
-        static_cast<BaseStar&>(*this) = p_BaseStar;
-        Initialise();
-        return *this;
+    TPAGB* Clone(const OBJECT_PERSISTENCE p_Persistence, const bool p_Initialise = true) {
+        TPAGB* clone = new TPAGB(*this, p_Initialise); 
+        clone->SetPersistence(p_Persistence); 
+        return clone; 
+    }
+
+    static TPAGB* Clone(TPAGB& p_Star, const OBJECT_PERSISTENCE p_Persistence, const bool p_Initialise = true) {
+        TPAGB* clone = new TPAGB(p_Star, p_Initialise); 
+        clone->SetPersistence(p_Persistence); 
+        return clone; 
     }
 
 
 protected:
 
     void Initialise() {
-        m_StellarType = STELLAR_TYPE::THERMALLY_PULSING_ASYMPTOTIC_GIANT_BRANCH;                                                                                                                            // Set stellar type
         CalculateTimescales();                                                                                                                                                                              // Initialise timescales
         m_Age = m_Timescales[static_cast<int>(TIMESCALE::tP)];                                                                                                                                              // Set age appropriately
    }
@@ -38,13 +44,13 @@ protected:
 
    // member functions - alphabetically
             double          CalculateCOCoreMassAtPhaseEnd() const                                                   { return (utils::Compare(m_COCoreMass, m_GBParams[static_cast<int>(GBP::McSN)]) >= 0 && utils::Compare(m_COCoreMass, m_Mass) < 0) ? m_COCoreMass : m_Mass; }
-            double          CalculateCOCoreMassOnPhase() const                                                      { return CalculateCoreMassOnPhase(m_Mass0, m_Age); }                                    // McCO(TPAGB) = Mc(TPAGB)Same as on phase
+            double          CalculateCOCoreMassOnPhase() const                                                      { return CalculateCoreMassOnPhase(m_Mass0, m_Age); }                                 // McCO(TPAGB) = Mc(TPAGB)Same as on phase
+
+            double          CalculateConvectiveCoreRadius() const                                                   { return std::min(5.0 * CalculateRemnantRadius(), m_Radius); }    // Last paragraph of section 6 of Hurley+ 2000
 
             double          CalculateCoreMassAtPhaseEnd() const                                                     { return m_CoreMass; }                                                                  // NO-OP
             double          CalculateCoreMassOnPhase(const double p_Mass, const double p_Time) const;
-            double          CalculateCoreMassOnPhase() const                                                        { return CalculateCoreMassOnPhase(m_Mass0, m_Age); }                                    // Use class member variables
-
-            double          CalculateGyrationRadius() const                                                         { return 0.1; }                                                                         // Hurley et al., 2000, after eq 109 for giants. Single number approximation.
+            double          CalculateCoreMassOnPhase() const                                                        { return CalculateCoreMassOnPhase(m_Mass0, m_Age); }                                 // Use class member variables
 
             double          CalculateHeCoreMassAtPhaseEnd() const                                                   { return m_HeCoreMass; }                                                                // NO-OP
             double          CalculateHeCoreMassOnPhase() const                                                      { return m_CoreMass; }                                                                  // NO-OP
@@ -88,11 +94,11 @@ protected:
             bool            IsEndOfPhase() const                                                                    { return !ShouldEvolveOnPhase(); }                                                      // Phase ends when envelope loss or going supernova
             bool            IsSupernova() const                                                                     { return (utils::Compare(m_COCoreMass, m_GBParams[static_cast<int>(GBP::McSN)]) >= 0 && utils::Compare(m_COCoreMass, m_Mass) < 0); } // Going supernova if still has envelope and core mass large enough
 
-            STELLAR_TYPE    ResolveEnvelopeLoss(bool p_NoCheck = false);
+            STELLAR_TYPE    ResolveEnvelopeLoss(bool p_Force = false);
             void            ResolveHeliumFlash() { }                                                                                                                                                        // NO-OP
             STELLAR_TYPE    ResolveSkippedPhase()                                                                   { return m_StellarType; }                                                               // NO-OP
 
-            bool            ShouldEvolveOnPhase() const                                                             { return (utils::Compare(m_COCoreMass, std::min(m_GBParams[static_cast<int>(GBP::McSN)], m_Mass)) < 0); } // Evolve on TPAGB phase if envelope is not lost and not going supernova
+            bool            ShouldEvolveOnPhase() const                                                             { return ((utils::Compare(m_COCoreMass, std::min(m_GBParams[static_cast<int>(GBP::McSN)], m_Mass)) < 0) && !ShouldEnvelopeBeExpelledByPulsations()); } // Evolve on TPAGB phase if envelope is not lost and not going supernova
             bool            ShouldSkipPhase() const                                                                 { return false; }                                                                       // Never skip TPAGB phase
 
 };

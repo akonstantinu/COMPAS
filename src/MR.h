@@ -13,22 +13,27 @@ class MR: virtual public BaseStar, public Remnants {
 
 public:
 
-    MR(const BaseStar &p_BaseStar, const bool p_Initialise = true) : BaseStar(p_BaseStar), Remnants(p_BaseStar, false) {
-        if (p_Initialise) Initialise();
+    MR(const BaseStar &p_BaseStar, const bool p_Initialise = true) : BaseStar(p_BaseStar), Remnants(p_BaseStar) {
+        m_StellarType = STELLAR_TYPE::MASSLESS_REMNANT;                                                     // Set stellar type
+        if (p_Initialise) Initialise();                                                                     // Initialise if required
     }
 
-    MR& operator = (const BaseStar &p_BaseStar) {
-        static_cast<BaseStar&>(*this) = p_BaseStar;
-        Initialise();
-        return *this;
+    MR* Clone(const OBJECT_PERSISTENCE p_Persistence, const bool p_Initialise = true) {
+        MR* clone = new MR(*this, p_Initialise); 
+        clone->SetPersistence(p_Persistence); 
+        return clone; 
+    }
+
+    static MR* Clone(MR& p_Star, const OBJECT_PERSISTENCE p_Persistence, const bool p_Initialise = true) {
+        MR* clone = new MR(p_Star, p_Initialise); 
+        clone->SetPersistence(p_Persistence); 
+        return clone; 
     }
 
 
 protected:
 
     void Initialise() {
-        m_StellarType = STELLAR_TYPE::MASSLESS_REMNANT;                                                     // Set stellar type
-
         // ensure it's a massless remnant...
         m_Age         = 0.0;
         m_Mass        = 0.0;
@@ -36,7 +41,6 @@ protected:
         m_HeCoreMass  = 0.0;
         m_CoreMass    = 0.0;
         m_Mass0       = 0.0;
-        m_CoreRadius  = 0.0;
         m_Luminosity  = 0.0;
         m_Radius      = 0.0;
         m_Temperature = 0.0;
@@ -44,13 +48,13 @@ protected:
 
 
     // member functions
-   	 double     CalculateMomentOfInertia(const double p_RemnantRadius = 0.0) const      { return 0.0; }     // No moment of inertia for massless remnants - use 0.0
-   	 double     CalculateMomentOfInertiaAU(const double p_RemnantRadius = 0.0) const    { return 0.0; }     // No moment of inertia for massless remnants - use 0.0
+   	 double     CalculateMomentOfInertia() const        { return 0.0; }                                     // No moment of inertia for massless remnants - use 0.0
+   	 double     CalculateMomentOfInertiaAU() const      { return 0.0; }                                     // No moment of inertia for massless remnants - use 0.0
 
      void       SetPulsarParameters() const { }                                                             // NO-OP
 
-     bool       ShouldEvolveOnPhase() const                                             { return true; }    // Always
-     bool       ShouldSkipPhase() const                                                 { return false; }   // Don't skip
+     bool       ShouldEvolveOnPhase() const             { return true; }                                    // Always
+     bool       ShouldSkipPhase() const                 { return false; }                                   // Don't skip
 };
 
 #endif // __MR_h__

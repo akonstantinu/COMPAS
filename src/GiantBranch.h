@@ -17,14 +17,16 @@ class GiantBranch: virtual public BaseStar, public MainSequence {
 
 public:
 
-    GiantBranch(const BaseStar &baseStar) : BaseStar(baseStar), MainSequence(baseStar) {}
-    GiantBranch& operator = (const BaseStar &baseStar) { static_cast<BaseStar&>(*this) = baseStar; return *this; }
+    GiantBranch(const BaseStar &p_BaseStar) : BaseStar(p_BaseStar), MainSequence(p_BaseStar) {}
 
 
 protected:
 
 
     // member functions - alphabetically (sort of - some are grouped by functionality)
+            double          CalculateConvectiveCoreMass() const { return m_CoreMass; }
+            double          CalculateConvectiveCoreRadius () const                      { return std::min(CalculateRemnantRadius (), m_Radius); }                       // Last paragraph of section 6 of Hurley+ 2000
+            DBL_DBL         CalculateConvectiveEnvelopeMass() const;
     static  double          CalculateCoreMassAt2ndDredgeUp_Static(const double p_McBAGB);
             double          CalculateCoreMassAtBAGB(const double p_Mass) const;
     static  double          CalculateCoreMassAtBAGB_Static(const double p_Mass, const DBL_VECTOR &p_BnCoefficients);
@@ -40,12 +42,15 @@ protected:
     static  double          CalculateCoreMass_Luminosity_Lx_Static(const DBL_VECTOR &p_GBParams);
     static  double          CalculateCoreMass_Luminosity_Mx_Static(const DBL_VECTOR &p_GBParams);
 
+            double          CalculateCriticalMassRatioClaeys14(const bool p_AccretorIsDegenerate) const; 
+            double          CalculateCriticalMassRatioHurleyHjellmingWebbink() const; 
+
             void            CalculateGBParams(const double p_Mass, DBL_VECTOR &p_GBParams);
     static  void            CalculateGBParams_Static(const double p_Mass, const double p_LogMetallicityXi, const DBL_VECTOR &p_MassCutoffs, const DBL_VECTOR &p_AnCoefficients, const DBL_VECTOR &p_BnCoefficients, DBL_VECTOR &p_GBParams);
-            void            CalculateGBParams()                                                             { CalculateGBParams(m_Mass0, m_GBParams); }                         // Use class member variables
+            void            CalculateGBParams()                                                             { CalculateGBParams(m_Mass0, m_GBParams); }                 // Use class member variables
 
     static  double          CalculateHRateConstant_Static(const double p_Mass);
-
+    
     virtual double          CalculateInitialSupernovaMass() const                                           { return m_Mass; }                                                  // Use class member variables
 
             double          CalculateLifetimeToHeIgnition(const double p_Mass, const double p_Tinf1_FGB, const double p_Tinf2_FGB);
@@ -76,16 +81,17 @@ protected:
             double          CalculateProtoCoreMassRapid();
             double          CalculateRemnantMassByBelczynski2002(const double p_Mass, const double p_COCoreMass, const double p_FallbackFraction);
             DBL_DBL         CalculateRemnantMassByFryer2012(const double p_Mass, const double p_COCoreMass);
+            DBL_DBL         CalculateRemnantMassByFryer2022(const double p_Mass, const double p_COCoreMass);
             double          CalculateRemnantMassByMuller2016(const double p_Mass, const double p_COCoreMass);
-	    double          CalculateRemnantMassByMullerMandel(const double p_COCoreMass, const double p_HeCoreMass);
-            double          CalculateRemnantMassBySchneider2020(const double p_COCoreMass, const bool p_useSchneiderAlt = false);
+            double          CalculateRemnantMassByMullerMandel(const double p_COCoreMass, const double p_HeCoreMass);
+            double          CalculateRemnantMassBySchneider2020(const double p_COCoreMass, const bool p_UseSchneiderAlt = false);
             double          CalculateRemnantMassBySchneider2020Alt(const double p_COCoreMass)               { return CalculateRemnantMassBySchneider2020(p_COCoreMass, true); }
-            double          CalculateMomentOfInertia(const double p_RemnantRadius = 0.0) const              { return (0.1 * (m_Mass - m_CoreMass) * m_Radius * m_Radius) + (0.21 * m_CoreMass * p_RemnantRadius * p_RemnantRadius); } // k2 = 0.1 and k3 = 0.21 as defined in Hurley et al. 2000, after eq 109
-            double          CalculateMomentOfInertiaAU(const double p_RemnantRadius = 0.0) const            { return CalculateMomentOfInertia(p_RemnantRadius * RSOL_TO_AU) * RSOL_TO_AU * RSOL_TO_AU; }
+
+            double          CalculateMomentOfInertia() const;
 
             double          CalculatePerturbationMu() const;
 
-            double          CalculateRadialExtentConvectiveEnvelope() const;
+            double          CalculateRadialExtentConvectiveEnvelope() const                                 { return (m_Radius - CalculateConvectiveCoreRadius()); }    //Hurley et al. 2002, sec. 2.3, particularly subsec. 2.3.1, eqs 36-40
 
             double          CalculateRadiusAtHeIgnition(const double p_Mass) const;
             double          CalculateRadiusOnPhase(const double p_Mass, const double p_Luminosity) const    { return CalculateRadiusOnPhase_Static(p_Mass, p_Luminosity, m_BnCoefficients); }
@@ -109,9 +115,8 @@ protected:
             void            CalculateTimescales(const double p_Mass, DBL_VECTOR &p_Timescales);
             void            CalculateTimescales()                                                           { CalculateTimescales(m_Mass0, m_Timescales); }                     // Use class member variables
 
-            double          CalculateZeta(ZETA_PRESCRIPTION p_ZetaPrescription)			            { return 0.0; }
-
-            bool            IsMassRatioUnstable(const double p_AccretorMass, const bool p_AccretorIsDegenerate) const;
+            double          CalculateZetaConstantsByEnvelope(ZETA_PRESCRIPTION p_ZetaPrescription);
+            double          CalculateZetaConvectiveEnvelopeGiant(ZETA_PRESCRIPTION p_ZetaPrescription);
 
     virtual void            PerturbLuminosityAndRadius();
 
@@ -125,6 +130,8 @@ protected:
             void            UpdateAgeAfterMassLoss() { }                                                                                                                        // NO-OP for most stellar types
 
             void            UpdateInitialMass() { }                                                                                                                             // NO-OP for most stellar types
+    
+            void            UpdateMinimumCoreMass() { }                                                                                                                         // NO-OP for most stellar types
 
 };
 
